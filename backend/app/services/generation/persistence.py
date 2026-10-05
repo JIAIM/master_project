@@ -12,6 +12,20 @@ from app.models.enums import (
 from app.services.generation.generator import GenerationSpec
 from app.services.generation.pipeline import PipelineResult, pipeline_models
 
+_TRUE_WORDS = {"true", "правда", "так", "вірно", "істина"}
+_FALSE_WORDS = {"false", "неправда", "ні", "невірно", "хибно", "хиба"}
+
+
+def true_false_label(text: str, language: str) -> str:
+    if language != "uk":
+        return text
+    key = text.strip().lower().rstrip(".!")
+    if key in _TRUE_WORDS:
+        return "Правда"
+    if key in _FALSE_WORDS:
+        return "Неправда"
+    return text
+
 
 def build_question(
     result: PipelineResult,
@@ -26,7 +40,8 @@ def build_question(
     models = pipeline_models()
 
     options = list(draft.options)
-    if spec.question_type != QuestionType.TRUE_FALSE.value:
+    is_true_false = spec.question_type == QuestionType.TRUE_FALSE.value
+    if not is_true_false:
         random.shuffle(options)
 
     question = Question(
@@ -50,7 +65,7 @@ def build_question(
     question.options = [
         AnswerOption(
             position=i,
-            text=o.text.strip(),
+            text=true_false_label(o.text, spec.language) if is_true_false else o.text.strip(),
             is_correct=o.is_correct,
             distractor_rationale=o.rationale.strip() or None,
         )

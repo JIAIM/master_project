@@ -25,6 +25,14 @@ class TestIsReferenceLike(unittest.TestCase):
         )
         self.assertTrue(is_reference_like(text))
 
+    def test_recognizes_table_of_contents(self):
+        text = (
+            "Вступ………………………… 4\n"
+            "6.1 Поняття основних фондів……………. 5\n"
+            "6.2 Показники стану і руху…….. 6\n"
+        )
+        self.assertTrue(is_reference_like(text))
+
     def test_regular_teaching_text_is_not_reference_like(self):
         text = (
             "Операційна система — це комплекс програм, що керує апаратними ресурсами "

@@ -5,6 +5,7 @@ from __future__ import annotations
 import random
 
 from app.services.generation.content_filters import is_reference_like
+from app.services.generation.sections import section_chunks, topic_section
 from app.services.rag.vectorstore import Chunk, MaterialVectorStore
 
 MIN_SEED_CHARS = 300
@@ -35,7 +36,20 @@ async def build_contexts(
 
     by_position = {(c.material_id, c.chunk_index): c for c in all_chunks}
 
-    if topic:
+    section: list[Chunk] = []
+    if topic and (ref := topic_section(topic)):
+        number, rest = ref
+        section = section_chunks(all_chunks, number)
+
+    if section:
+        usable = [c for c in section if len(c.text) >= MIN_SEED_CHARS and not is_reference_like(c.text)] or section
+        seeds = []
+        if rest:
+            allowed = {c.id for c in usable}
+            found = await store.search(rest, material_ids, k=min(len(all_chunks), 200))
+            seeds = [c for c in found if c.id in allowed][:n]
+        seeds = seeds or evenly_spaced(usable, n)
+    elif topic:
         k = min(len(all_chunks), max(n * 2, 8))
         found = await store.search(topic, material_ids, k=k)
         seeds = [c for c in found if not is_reference_like(c.text)] or found
@@ -44,11 +58,12 @@ async def build_contexts(
         usable = [c for c in candidates if not is_reference_like(c.text)] or candidates or all_chunks
         seeds = evenly_spaced(usable, n)
 
+    section_ids = {c.id for c in section}
     contexts: list[list[Chunk]] = []
     for i in range(n):
         seed = seeds[i % len(seeds)]
         nxt = by_position.get((seed.material_id, seed.chunk_index + 1))
-        if nxt is not None and is_reference_like(nxt.text):
+        if nxt is not None and (is_reference_like(nxt.text) or (section_ids and nxt.id not in section_ids)):
             nxt = None
         contexts.append([seed, nxt] if nxt else [seed])
     return contexts
