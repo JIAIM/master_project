@@ -12,19 +12,32 @@ from app.models.enums import (
 from app.services.generation.generator import GenerationSpec
 from app.services.generation.pipeline import PipelineResult, pipeline_models
 
-_TRUE_WORDS = {"true", "правда", "так", "вірно", "істина"}
-_FALSE_WORDS = {"false", "неправда", "ні", "невірно", "хибно", "хиба"}
+_FALSE_PREFIXES = ("false", "неправ", "невір", "хиб", "неістин", "ні")
+_TRUE_PREFIXES = ("true", "правд", "правил", "вірн", "істин", "так")
+_UK_LABELS = {True: "Правда", False: "Неправда"}
 
 
-def true_false_label(text: str, language: str) -> str:
-    if language != "uk":
-        return text
-    key = text.strip().lower().rstrip(".!")
-    if key in _TRUE_WORDS:
-        return "Правда"
-    if key in _FALSE_WORDS:
-        return "Неправда"
-    return text
+def _true_false_kind(text: str) -> bool | None:
+    key = text.strip().lower()
+    if key.startswith(_FALSE_PREFIXES):
+        return False
+    if key.startswith(_TRUE_PREFIXES):
+        return True
+    return None
+
+
+def true_false_labels(texts: list[str], language: str) -> list[str]:
+    """Однакові мітки «Правда / Неправда» незалежно від слів, які обрала модель."""
+    texts = [t.strip() for t in texts]
+    if language != "uk" or len(texts) != 2:
+        return texts
+    kinds = [_true_false_kind(t) for t in texts]
+    if kinds.count(None) == 1:
+        known = next(k for k in kinds if k is not None)
+        kinds = [k if k is not None else not known for k in kinds]
+    if None in kinds or kinds[0] == kinds[1]:
+        return texts
+    return [_UK_LABELS[k] for k in kinds]
 
 
 def build_question(
@@ -62,10 +75,13 @@ def build_question(
         points=parent.points if parent else 1.0,
         time_limit_sec=parent.time_limit_sec if parent else None,
     )
+    texts = [o.text for o in options]
+    if is_true_false:
+        texts = true_false_labels(texts, spec.language)
     question.options = [
         AnswerOption(
             position=i,
-            text=true_false_label(o.text, spec.language) if is_true_false else o.text.strip(),
+            text=texts[i].strip(),
             is_correct=o.is_correct,
             distractor_rationale=o.rationale.strip() or None,
         )
