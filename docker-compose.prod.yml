@@ -1,0 +1,86 @@
+name: edutest-std14
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-edu}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Задайте POSTGRES_PASSWORD у .env}
+      POSTGRES_DB: ${POSTGRES_DB:-edu_platform}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-edu} -d ${POSTGRES_DB:-edu_platform}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+
+  chroma:
+    image: chromadb/chroma:${CHROMA_VERSION:-1.0.15}
+    restart: unless-stopped
+    environment:
+      IS_PERSISTENT: "TRUE"
+      ANONYMIZED_TELEMETRY: "FALSE"
+    volumes:
+      - chroma_data:/data
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+
+  backend:
+    build:
+      context: ./backend
+      target: prod
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-edu}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-edu_platform}
+      CHROMA_HOST: chroma
+      CHROMA_PORT: 8000
+      UPLOAD_DIR: /data/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+      chroma:
+        condition: service_started
+    volumes:
+      - uploads:/data/uploads
+      - hf_cache:/models
+    command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1 --proxy-headers --forwarded-allow-ips='*'"
+    deploy:
+      resources:
+        limits:
+          memory: 3g
+
+  frontend:
+    build:
+      context: ./frontend
+      target: prod
+      args:
+        VITE_API_URL: /api/v1
+    restart: unless-stopped
+    environment:
+      PUBLIC_HOST: ${PUBLIC_HOST:-localhost}
+    depends_on:
+      - backend
+    volumes:
+      - certs:/etc/nginx/certs
+    ports:
+      - "${PUBLIC_PORT:-4053}:443"
+    deploy:
+      resources:
+        limits:
+          memory: 128m
+
+volumes:
+  pg_data:
+  chroma_data:
+  uploads:
+  hf_cache:
+  certs:
