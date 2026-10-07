@@ -74,10 +74,19 @@ function UploadZone({ onUploaded }) {
   );
 }
 
-function MaterialCard({ m, selected, onToggle }) {
+function MaterialCard({ m, selected, onToggle, onChanged, onError }) {
   const st = STATUS[m.status] ?? { label: m.status, cls: "pending" };
   const ready = m.status === "indexed";
+  const busy = m.status === "uploaded" || m.status === "processing";
+
+  const retry = () => api(`/materials/${m.id}/reindex`, { method: "POST" }).then(onChanged).catch((e) => onError(e.message));
+  const remove = () => {
+    if (!window.confirm(`Видалити матеріал «${m.title}»? Уже створені тести й питання залишаться.`)) return;
+    api(`/materials/${m.id}`, { method: "DELETE" }).then(onChanged).catch((e) => onError(e.message));
+  };
+
   return (
+    <div className="material-item">
     <button
       type="button"
       className={`material-card ${selected ? "selected" : ""} ${ready ? "" : "not-ready"}`}
@@ -95,6 +104,13 @@ function MaterialCard({ m, selected, onToggle }) {
       </span>
       <span className={`pill ${st.cls} ${st.cls === "pending" ? "status-pulse" : ""}`}>{st.label}</span>
     </button>
+    {!busy && (
+      <div className="material-actions">
+        {m.status === "failed" && <button type="button" className="small-btn" onClick={retry}>Обробити знову</button>}
+        <button type="button" className="small-btn" onClick={remove}>Видалити</button>
+      </div>
+    )}
+    </div>
   );
 }
 
@@ -206,7 +222,9 @@ export default function GeneratePage() {
         {materials?.length === 0 && <p className="muted">Матеріалів ще немає — завантажте конспект лекцій вище.</p>}
         <div className="material-grid">
           {materials?.map((m) => (
-            <MaterialCard key={m.id} m={m} selected={selected.includes(m.id)} onToggle={toggle} />
+            <MaterialCard key={m.id} m={m} selected={selected.includes(m.id)} onToggle={toggle}
+                          onChanged={() => { setSelected((p) => p.filter((x) => x !== m.id)); loadMaterials(); }}
+                          onError={setError} />
           ))}
         </div>
       </div>

@@ -61,6 +61,13 @@ async def upload_material(
     duplicate = await db.scalar(
         select(Material).where(Material.owner_id == user.id, Material.content_hash == digest)
     )
+    if duplicate is not None and duplicate.status == MaterialStatus.FAILED:
+        duplicate.status = MaterialStatus.UPLOADED
+        duplicate.error_message = None
+        await db.commit()
+        await db.refresh(duplicate)
+        background.add_task(ingest_material, duplicate.id)
+        return duplicate
     if duplicate is not None:
         raise HTTPException(
             status.HTTP_409_CONFLICT,
@@ -114,6 +121,10 @@ async def reindex_material(
     material = await _get_owned_material(db, material_id, user)
     if material.status == MaterialStatus.PROCESSING:
         raise HTTPException(status.HTTP_409_CONFLICT, "Матеріал уже обробляється")
+    material.status = MaterialStatus.UPLOADED
+    material.error_message = None
+    await db.commit()
+    await db.refresh(material)
     background.add_task(ingest_material, material.id)
     return material
 

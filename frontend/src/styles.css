@@ -96,6 +96,8 @@ td .pill, .row .pill { margin-left: 0; }
 .material-card.not-ready .material-check { border-style: dashed; }
 .material-body { display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0; }
 .material-title { font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
+.material-item { display: flex; flex-direction: column; gap: 4px; }
+.material-actions { display: flex; gap: 6px; justify-content: flex-end; }
 
 /* --- лічильники типів питань --- */
 .counters { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr)); gap: 10px; align-items: stretch; }
