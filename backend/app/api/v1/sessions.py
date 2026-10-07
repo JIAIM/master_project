@@ -2,6 +2,7 @@
 import csv
 import io
 import secrets
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, HTTPException, status
 from fastapi.responses import StreamingResponse
@@ -12,7 +13,7 @@ from app.api.deps import DbSession, OptionalUser, Teacher, get_owned_test
 from app.models import (
     ProctoringEvent, Question, SessionParticipant, StudentAnswer, StudentResult, Test, TestSession,
 )
-from app.models.enums import QuestionStatus, SessionStatus, UserRole
+from app.models.enums import ProctoringEventType, QuestionStatus, SessionStatus, UserRole
 from app.schemas.session import (
     AnalyticsOut, DashboardOut, ItemStatsOut, JoinRequest, JoinResponse, ParticipantRow,
     ProctoringEventOut, ResultRow, SessionCreate, SessionOut, SessionSummary,
@@ -21,6 +22,12 @@ from app.services.analytics.item_analysis import Response, analyze
 from app.services.testing import service
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
+KYIV = ZoneInfo("Europe/Kyiv")
+
+
+def _csv_safe(value: str) -> str:
+    """Excel не виконує текст, що починається з =, +, -, @, як формулу."""
+    return "'" + value if value[:1] in ("=", "+", "-", "@", "\t", "\r") else value
 
 
 async def _owned_session(db, session_id: int, user) -> TestSession:
@@ -117,6 +124,11 @@ async def dashboard(session_id: int, db: DbSession, user: Teacher) -> DashboardO
     results = {r.participant_id: r for r in await db.scalars(
         select(StudentResult).where(StudentResult.session_id == session.id))}
     alerts = await service.active_alerts(db, session.id)
+    camera_off = set(await db.scalars(
+        select(ProctoringEvent.participant_id).where(
+            ProctoringEvent.session_id == session.id,
+            ProctoringEvent.event_type.in_([ProctoringEventType.CAMERA_DENIED,
+                                            ProctoringEventType.PROCTORING_UNAVAILABLE]))))
 
     rows = []
     for p in await db.scalars(select(SessionParticipant).where(SessionParticipant.session_id == session.id)
@@ -130,6 +142,7 @@ async def dashboard(session_id: int, db: DbSession, user: Teacher) -> DashboardO
             correct_count=r.correct_count if r else None,
             distraction_count=distractions.get(p.id, 0),
             alert_active=p.id in alerts and not r,
+            camera_off=p.id in camera_off,
             joined_at=p.joined_at, finished_at=r.finished_at if r else None,
         ))
     return DashboardOut(session=SessionOut.model_validate(session), test_title=test.title,
@@ -172,7 +185,8 @@ async def join_session(data: JoinRequest, db: DbSession, user: OptionalUser) -> 
     except IntegrityError:
         await db.rollback()
         raise HTTPException(status.HTTP_409_CONFLICT,
-                            "Це ім'я вже зайняте в цьому тесті — додайте, наприклад, прізвище") from None
+                            "Це ім'я вже використовується в цьому тесті. Якщо це ви — відкрийте сайт у тому "
+                            "самому браузері й натисніть «Продовжити»; інакше додайте прізвище.") from None
     return JoinResponse(token=participant.reconnect_token, display_name=name, test_title=test.title)
 
 
@@ -201,14 +215,15 @@ async def session_results(session_id: int, db: DbSession, user: Teacher) -> list
 @router.get("/{session_id}/results.csv")
 async def session_results_csv(session_id: int, db: DbSession, user: Teacher) -> StreamingResponse:
     session = await _owned_session(db, session_id, user)
+    total = len((session.settings or {}).get("question_ids", []))
     buf = io.StringIO()
     buf.write("﻿")  # BOM — щоб Excel правильно відкрив кирилицю
     writer = csv.writer(buf, delimiter=";")
-    writer.writerow(["Місце", "Студент", "Бали", "Максимум", "Правильних", "Відповідей",
+    writer.writerow(["Місце", "Студент", "Бали", "Максимум", "Правильних", "Відповідей", "Без відповіді",
                      "Порушень уваги", "Завершено"])
     for r in await _result_rows(db, session_id):
-        writer.writerow([r.rank, r.display_name, f"{r.score:g}", f"{r.max_score:g}", r.correct_count,
-                         r.answered_count, r.distraction_count, r.finished_at.strftime("%d.%m.%Y %H:%M")])
+        writer.writerow([r.rank, _csv_safe(r.display_name), f"{r.score:g}", f"{r.max_score:g}", r.correct_count,
+                         r.answered_count, max(0, total - r.answered_count), r.distraction_count, r.finished_at.astimezone(KYIV).strftime("%d.%m.%Y %H:%M")])
     filename = f"results_session_{session.id}.csv"
     return StreamingResponse(
         iter([buf.getvalue()]), media_type="text/csv; charset=utf-8",

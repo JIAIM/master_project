@@ -23,6 +23,7 @@ export default function ResultsPage() {
       {sessions?.length === 0 && <div className="card empty"><p>Ще не проведено жодного тесту.</p></div>}
       {sessions?.length > 0 && (
         <div className="card">
+          <div className="table-wrap">
           <table className="table">
             <thead>
               <tr><th>Дата</th><th>Тест</th><th>Стан</th><th>Студентів</th><th>Середній бал</th><th></th></tr>
@@ -40,6 +41,7 @@ export default function ResultsPage() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
     </div>

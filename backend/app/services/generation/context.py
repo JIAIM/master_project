@@ -69,6 +69,20 @@ async def build_contexts(
     return contexts
 
 
+def plan_true_false(types: list[str]) -> list[str | None]:
+    """Порівну правдивих і хибних тверджень для питань «правда/неправда», у випадковому порядку."""
+    tf = [i for i, t in enumerate(types) if t == "true_false"]
+    rng = random.Random(len(types))
+    answers = ["false"] * (len(tf) // 2) + ["true"] * (len(tf) - len(tf) // 2)
+    if len(tf) % 2:
+        answers[-1] = rng.choice(["true", "false"])
+    rng.shuffle(answers)
+    plan: list[str | None] = [None] * len(types)
+    for i, a in zip(tf, answers):
+        plan[i] = a
+    return plan
+
+
 def plan_difficulties(n: int, difficulty: str) -> list[str]:
     """'mixed' → 30% легких / 50% середніх / 20% складних, перемішано."""
     if difficulty != "mixed":

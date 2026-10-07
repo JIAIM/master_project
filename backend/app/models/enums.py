@@ -58,6 +58,8 @@ class ProctoringEventType(StrEnum):
     MULTIPLE_FACES = "multiple_faces"
     TAB_HIDDEN = "tab_hidden"                    # перехід на іншу вкладку
     FULLSCREEN_EXIT = "fullscreen_exit"
+    CAMERA_DENIED = "camera_denied"                  # студент не дав доступу до камери
+    PROCTORING_UNAVAILABLE = "proctoring_unavailable"  # розпізнавання облич не запустилося
 
 
 class JobStatus(StrEnum):

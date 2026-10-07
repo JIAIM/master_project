@@ -2,12 +2,17 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../api/client.js";
 
+function savedPlayer() {
+  try { return JSON.parse(localStorage.getItem("player")); } catch { return null; }
+}
+
 export default function JoinPage() {
   const navigate = useNavigate();
   const [pin, setPin] = useState("");
   const [name, setName] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [saved] = useState(savedPlayer);
 
   const submit = async (e) => {
     e.preventDefault();
@@ -18,7 +23,7 @@ export default function JoinPage() {
         method: "POST",
         body: { pin: pin.trim(), display_name: name.trim() },
       });
-      sessionStorage.setItem("player", JSON.stringify(data));
+      localStorage.setItem("player", JSON.stringify(data));
       navigate("/play");
     } catch (err) {
       setError(err.message);
@@ -29,6 +34,14 @@ export default function JoinPage() {
 
   return (
     <div className="card narrow">
+      {saved?.token && (
+        <div className="notice ok stack" style={{ marginTop: 0, marginBottom: 16, gap: 8 }}>
+          <span>Тест «{saved.test_title}» — {saved.display_name}</span>
+          <div className="row gap-sm">
+            <button className="primary" onClick={() => navigate("/play")}>Продовжити</button>
+          </div>
+        </div>
+      )}
       <h1>Пройти тест</h1>
       <p className="muted small">Введіть PIN, який показав викладач, і своє ім'я та прізвище.</p>
       <form onSubmit={submit} className="stack">

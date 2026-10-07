@@ -51,6 +51,11 @@ async def upload_material(
         raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, f"Файл більший за {settings.MAX_UPLOAD_MB} МБ")
     if not content:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Файл порожній")
+    if not content.startswith(b"%PDF" if ext == ".pdf" else b"PK"):
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            f"Файл пошкоджений або не є справжнім {ext[1:].upper()} — збережіть його ще раз і завантажте знову",
+        )
 
     digest = hashlib.sha256(content).hexdigest()
     duplicate = await db.scalar(
@@ -73,7 +78,7 @@ async def upload_material(
 
     material = Material(
         owner_id=user.id,
-        title=(title or Path(file.filename or "material").stem)[:255],
+        title=((title or "").strip() or Path(file.filename or "material").stem)[:255],
         original_filename=(file.filename or "material")[:255],
         file_path=str(target),
         mime_type=MIME_BY_EXT[ext],

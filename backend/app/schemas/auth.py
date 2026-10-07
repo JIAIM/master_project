@@ -1,4 +1,6 @@
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from typing import Annotated
+
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, StringConstraints
 
 from app.models.enums import UserRole
 
@@ -6,7 +8,7 @@ from app.models.enums import UserRole
 class UserCreate(BaseModel):
     email: EmailStr
     password: str = Field(min_length=8, max_length=72)  # bcrypt обмежений 72 байтами
-    full_name: str = Field(min_length=2, max_length=255)
+    full_name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=2, max_length=255)]
     role: UserRole = UserRole.STUDENT
 
 

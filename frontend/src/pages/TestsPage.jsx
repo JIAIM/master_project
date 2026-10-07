@@ -4,7 +4,7 @@ import { api } from "../api/client.js";
 
 function LaunchPanel({ test, onCancel }) {
   const navigate = useNavigate();
-  const [includeAi, setIncludeAi] = useState(!test.is_published);
+  const [includeAi, setIncludeAi] = useState(test.approved_count === 0);
   const [showReview, setShowReview] = useState(true);
   const [limitOn, setLimitOn] = useState(false);
   const [limitMin, setLimitMin] = useState(20);
@@ -98,9 +98,11 @@ export default function TestsPage() {
           <div className="test-card-main">
             <div>
               <Link to={`/teacher/tests/${t.id}`} className="test-title-link">{t.title}</Link>
-              {t.is_published
-                ? <span className="pill ok">переглянуто</span>
-                : <span className="pill pending">питання ще не переглянуто</span>}
+              {t.question_count === 0
+                ? <span className="pill neutral">немає питань</span>
+                : t.approved_count === t.question_count
+                  ? <span className="pill ok">усі питання затверджено</span>
+                  : <span className="pill pending">затверджено {t.approved_count} з {t.question_count}</span>}
               <div className="muted small">
                 {t.materials.length ? `Матеріали: ${t.materials.map((m) => m.title).join(", ")}` : "Без матеріалів"}
               </div>

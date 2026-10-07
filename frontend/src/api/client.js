@@ -23,6 +23,16 @@ function errorMessage(data, status) {
   return `Помилка ${status}`;
 }
 
+const OFFLINE = "Немає з'єднання з сервером. Перевірте інтернет і спробуйте ще раз.";
+
+async function send(url, options) {
+  try {
+    return await fetch(url, options);
+  } catch {
+    throw new ApiError(OFFLINE, 0, null);
+  }
+}
+
 export async function api(path, { method = "GET", body, form, auth = true } = {}) {
   const headers = {};
   const token = getToken();
@@ -33,14 +43,39 @@ export async function api(path, { method = "GET", body, form, auth = true } = {}
     headers["Content-Type"] = "application/json";
     payload = JSON.stringify(body);
   }
-  const res = await fetch(API_URL + path, { method, headers, body: payload });
+  const res = await send(API_URL + path, { method, headers, body: payload });
   if (res.status === 204) return null;
   const data = await res.json().catch(() => null);
   if (!res.ok) {
-    if (res.status === 401 && auth) logout();
+    if (res.status === 401 && auth && token) {
+      logout();
+      if (window.location.pathname.startsWith("/teacher")) {
+        window.location.href = "/login";
+        throw new ApiError("Сеанс завершився — увійдіть знову", 401, data);
+      }
+    }
     throw new ApiError(errorMessage(data, res.status), res.status, data);
   }
   return data;
+}
+
+export async function download(path, fallbackName) {
+  const res = await send(API_URL + path, { headers: { Authorization: `Bearer ${getToken()}` } });
+  if (!res.ok) {
+    const data = await res.json().catch(() => null);
+    throw new ApiError(errorMessage(data, res.status) || "Не вдалося завантажити файл", res.status, data);
+  }
+  const cd = res.headers.get("Content-Disposition") || "";
+  const utf = /filename\*=UTF-8''([^;]+)/.exec(cd);
+  const name = utf ? decodeURIComponent(utf[1]) : fallbackName;
+  const url = URL.createObjectURL(await res.blob());
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
 
 function saveAuth(data) {
@@ -51,7 +86,7 @@ function saveAuth(data) {
 
 export async function login(email, password) {
   const form = new URLSearchParams({ username: email, password });
-  const res = await fetch(API_URL + "/auth/login", { method: "POST", body: form });
+  const res = await send(API_URL + "/auth/login", { method: "POST", body: form });
   const data = await res.json().catch(() => null);
   if (!res.ok) throw new ApiError(errorMessage(data, res.status), res.status, data);
   return saveAuth(data);

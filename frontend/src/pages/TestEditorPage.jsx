@@ -1,25 +1,9 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { API_URL, api, getToken } from "../api/client.js";
+import { api, download } from "../api/client.js";
 
-async function downloadExport(testId, format, answers) {
-  const res = await fetch(`${API_URL}/tests/${testId}/export?format=${format}&answers=${answers}`, {
-    headers: { Authorization: `Bearer ${getToken()}` },
-  });
-  if (!res.ok) {
-    const data = await res.json().catch(() => null);
-    throw new Error(data?.detail || "Не вдалося сформувати файл");
-  }
-  const cd = res.headers.get("Content-Disposition") || "";
-  const utf = /filename\*=UTF-8''([^;]+)/.exec(cd);
-  const name = utf ? decodeURIComponent(utf[1]) : `test_${testId}.${format}`;
-  const url = URL.createObjectURL(await res.blob());
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = name;
-  a.click();
-  URL.revokeObjectURL(url);
-}
+const downloadExport = (testId, format, answers) =>
+  download(`/tests/${testId}/export?format=${format}&answers=${answers}`, `test_${testId}.${format}`);
 
 function ExportBar({ testId, disabled, savedFormUrl }) {
   const [busy, setBusy] = useState("");

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { api } from "../api/client.js";
 import { useProctoring } from "../hooks/useProctoring.js";
 
@@ -48,11 +48,11 @@ function Review({ result }) {
         )}
       </div>
       {result.review ? result.review.map((q, i) => (
-        <div key={q.question_id} className={`card review ${q.is_correct ? "ok" : "bad"}`}>
+        <div key={q.question_id} className={`card review ${q.is_correct ? "ok" : q.selected.length ? "bad" : "skipped"}`}>
           <div className="review-head">
             <span className="q-num">{i + 1}</span>
             <strong>{q.text}</strong>
-            <span className={`pill ${q.is_correct ? "ok" : "bad"}`}>{q.is_correct ? "правильно" : q.selected.length ? "неправильно" : "без відповіді"}</span>
+            <span className={`pill ${q.is_correct ? "ok" : q.selected.length ? "bad" : "neutral"}`}>{q.is_correct ? "правильно" : q.selected.length ? "неправильно" : "без відповіді"}</span>
           </div>
           <ul className="review-options">
             {q.options.map((o) => {
@@ -74,9 +74,10 @@ function Review({ result }) {
 
 export default function PlayPage() {
   const creds = useMemo(() => {
-    try { return JSON.parse(sessionStorage.getItem("player")); } catch { return null; }
+    try { return JSON.parse(localStorage.getItem("player")); } catch { return null; }
   }, []);
   const token = creds?.token;
+  const navigate = useNavigate();
 
   const [data, setData] = useState(null);
   const [answers, setAnswers] = useState({});
@@ -93,6 +94,7 @@ export default function PlayPage() {
       setAnswers(st.answers || {});
       setOffset(st.server_time_ms - Date.now());
     } catch (e) {
+      if (e.status === 404) localStorage.removeItem("player");
       setError(e.message);
     }
   }, [token]);
@@ -184,16 +186,22 @@ export default function PlayPage() {
 
       {error && <div className="notice bad">⚠️ {error}</div>}
 
-      {inProgress && (
+      {inProgress && (camStatus === "denied" || camStatus === "error") && (
+        <div className="notice bad small">
+          {camStatus === "denied"
+            ? "📷 Доступ до камери заборонено — викладач бачить це в журналі. Щоб увімкнути, дозвольте камеру в налаштуваннях браузера й оновіть сторінку."
+            : "📷 Не вдалося запустити розпізнавання на цьому пристрої — викладач бачить це в журналі."}
+        </div>
+      )}
+
+      {inProgress && camStatus !== "denied" && camStatus !== "error" && (
         <aside className={`camera attention-${attention}`}>
           <video ref={videoRef} muted playsInline />
           <div className="camera-status">
             {camStatus === "loading" && "Запуск камери…"}
-            {camStatus === "denied" && "Доступ до камери заборонено — викладач це побачить"}
-            {camStatus === "error" && "Не вдалося запустити розпізнавання"}
             {camStatus === "ready" && ATTENTION_LABEL[attention]}
           </div>
-          {!document.fullscreenElement && (
+          {!document.fullscreenElement && document.documentElement.requestFullscreen && (
             <button className="small-btn" onClick={() => document.documentElement.requestFullscreen?.()}>
               На весь екран
             </button>
@@ -249,6 +257,9 @@ export default function PlayPage() {
             <p className="muted center small">Тест завершено викладачем або через ліміт часу.</p>
           )}
           {data.result && <Review result={data.result} />}
+          <div className="center">
+            <button onClick={() => { localStorage.removeItem("player"); navigate("/"); }}>Вийти</button>
+          </div>
         </>
       )}
     </div>

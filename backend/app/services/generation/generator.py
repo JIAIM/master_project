@@ -18,6 +18,7 @@ class GenerationSpec:
     difficulty: str       # easy | medium | hard
     question_type: str    # single_choice | multiple_choice | true_false
     language: str = "uk"
+    target_answer: str | None = None  # true | false — для «правда/неправда»
 
     @property
     def num_options(self) -> int:
@@ -68,7 +69,7 @@ class QuestionGenerator:
             "language": spec.language_name,
             "difficulty": spec.difficulty,
             "bloom": spec.bloom,
-            "type_rules": type_rules(spec.question_type, spec.num_options, spec.language_name),
+            "type_rules": type_rules(spec.question_type, spec.num_options, spec.language_name, spec.target_answer),
             "existing": existing,
             "revision_block": revision_block,
         })

@@ -1,8 +1,8 @@
 import random
 from datetime import datetime
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 from app.models.enums import (
     Difficulty, JobStatus, QuestionOrigin, QuestionStatus, QuestionType, VerificationVerdict,
@@ -12,14 +12,14 @@ from app.schemas.material import MaterialBrief
 
 # --- Тести ---
 class TestCreate(BaseModel):
-    title: str = Field(min_length=1, max_length=255)
+    title: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=255)]
     description: str | None = None
     material_ids: list[int] = Field(min_length=1)
     default_time_limit_sec: int = Field(30, ge=5, le=600)
 
 
 class TestUpdate(BaseModel):
-    title: str | None = Field(None, min_length=1, max_length=255)
+    title: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=255)] | None = None
     description: str | None = None
     default_time_limit_sec: int | None = Field(None, ge=5, le=600)
     is_published: bool | None = None
@@ -36,6 +36,12 @@ class TestOut(BaseModel):
     google_form_url: str | None
     created_at: datetime
     materials: list[MaterialBrief]
+
+
+class TestListItem(TestOut):
+    question_count: int = 0
+    approved_count: int = 0
+    ai_verified_count: int = 0
 
 
 class GoogleFormOut(BaseModel):
@@ -97,7 +103,7 @@ class TestDetail(TestOut):
 
 
 class OptionIn(BaseModel):
-    text: str = Field(min_length=1)
+    text: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=1000)]
     is_correct: bool = False
     distractor_rationale: str | None = None
 
@@ -117,7 +123,7 @@ def _validate_options(qtype: QuestionType, options: list[OptionIn]) -> None:
 
 class QuestionCreate(BaseModel):
     type: QuestionType = QuestionType.SINGLE_CHOICE
-    text: str = Field(min_length=5)
+    text: Annotated[str, StringConstraints(strip_whitespace=True, min_length=5, max_length=2000)]
     explanation: str | None = None
     difficulty: Difficulty = Difficulty.MEDIUM
     points: float = Field(1.0, gt=0)
@@ -131,7 +137,7 @@ class QuestionCreate(BaseModel):
 
 
 class QuestionUpdate(BaseModel):
-    text: str | None = Field(None, min_length=5)
+    text: Annotated[str, StringConstraints(strip_whitespace=True, min_length=5, max_length=2000)] | None = None
     explanation: str | None = None
     difficulty: Difficulty | None = None
     points: float | None = Field(None, gt=0)
@@ -157,7 +163,7 @@ class GenerateTestRequest(BaseModel):
     single_choice_count: int = Field(10, ge=0, le=MAX_QUESTIONS_PER_JOB)
     true_false_count: int = Field(0, ge=0, le=MAX_QUESTIONS_PER_JOB)
     difficulty: Difficulty | Literal["mixed"] = "mixed"
-    topic: str | None = Field(None, max_length=300)
+    topic: Annotated[str, StringConstraints(strip_whitespace=True, max_length=300)] | None = None
     language: str = Field("uk", max_length=8)
 
     @model_validator(mode="after")

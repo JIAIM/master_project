@@ -1,4 +1,4 @@
-import { Navigate, NavLink, Route, Routes, Link } from "react-router-dom";
+import { Navigate, NavLink, Route, Routes, Link, useLocation } from "react-router-dom";
 import { getUser, logout } from "./api/client.js";
 import JoinPage from "./pages/JoinPage.jsx";
 import PlayPage from "./pages/PlayPage.jsx";
@@ -17,6 +17,7 @@ function RequireTeacher({ children }) {
 
 export default function App() {
   const user = getUser();
+  const location = useLocation();
   return (
     <div className="app">
       <header className="topbar">
@@ -41,7 +42,7 @@ export default function App() {
           <Route path="/play" element={<PlayPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/teacher" element={<RequireTeacher><TestsPage /></RequireTeacher>} />
-          <Route path="/teacher/generate" element={<RequireTeacher><GeneratePage /></RequireTeacher>} />
+          <Route path="/teacher/generate" element={<RequireTeacher><GeneratePage key={location.key} /></RequireTeacher>} />
           <Route path="/teacher/tests/:testId" element={<RequireTeacher><TestEditorPage /></RequireTeacher>} />
           <Route path="/teacher/sessions/:sessionId" element={<RequireTeacher><SessionPage /></RequireTeacher>} />
           <Route path="/teacher/results" element={<RequireTeacher><ResultsPage /></RequireTeacher>} />

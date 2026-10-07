@@ -3,7 +3,7 @@ from typing import Literal
 from urllib.parse import quote
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Response, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
 from app.api.deps import DbSession, Teacher, get_owned_test
@@ -12,7 +12,7 @@ from app.models import GenerationJob, Material, Question, StudentAnswer, Test
 from app.models.enums import JobStatus, MaterialStatus, QuestionStatus
 from app.schemas.test import (
     GenerateTestRequest, GenerationJobOut, GoogleFormOut, QuestionOut, TestCreate, TestDetail, TestOut,
-    TestUpdate,
+    TestListItem, TestUpdate,
 )
 from app.services.export.documents import (
     ExportOption, ExportQuestion, ExportTest, build_docx, build_pdf,
@@ -45,15 +45,30 @@ async def create_test(data: TestCreate, db: DbSession, user: Teacher) -> Test:
     return await get_owned_test(db, test.id, user)
 
 
-@router.get("/tests", response_model=list[TestOut])
-async def list_tests(db: DbSession, user: Teacher) -> list[Test]:
-    rows = await db.scalars(
+@router.get("/tests", response_model=list[TestListItem])
+async def list_tests(db: DbSession, user: Teacher) -> list[TestListItem]:
+    tests = list(await db.scalars(
         select(Test)
         .where(Test.owner_id == user.id)
         .options(selectinload(Test.materials))
         .order_by(Test.created_at.desc())
-    )
-    return list(rows)
+    ))
+    counts: dict[int, dict[QuestionStatus, int]] = {}
+    for test_id, st, n in (await db.execute(
+        select(Question.test_id, Question.status, func.count())
+        .where(Question.test_id.in_([t.id for t in tests]), Question.status != QuestionStatus.ARCHIVED)
+        .group_by(Question.test_id, Question.status)
+    )).all():
+        counts.setdefault(test_id, {})[st] = n
+    return [
+        TestListItem(
+            **TestOut.model_validate(t).model_dump(),
+            question_count=sum(counts.get(t.id, {}).values()),
+            approved_count=counts.get(t.id, {}).get(QuestionStatus.APPROVED, 0),
+            ai_verified_count=counts.get(t.id, {}).get(QuestionStatus.AI_VERIFIED, 0),
+        )
+        for t in tests
+    ]
 
 
 async def _export_model(db, test: Test, include_ai_verified: bool) -> ExportTest:

@@ -1,7 +1,7 @@
 from datetime import datetime
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
 from app.models.enums import ProctoringEventType, QuestionType, SessionStatus
 
@@ -54,6 +54,7 @@ class ParticipantRow(BaseModel):
     correct_count: int | None
     distraction_count: int
     alert_active: bool
+    camera_off: bool = False
     joined_at: datetime
     finished_at: datetime | None
 
@@ -109,8 +110,8 @@ class AnalyticsOut(BaseModel):
 
 # --- Студент ---
 class JoinRequest(BaseModel):
-    pin: str = Field(pattern=r"^\d{6}$")
-    display_name: str = Field(min_length=1, max_length=100)
+    pin: Annotated[str, StringConstraints(strip_whitespace=True, pattern=r"^\d{6}$")]
+    display_name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=2, max_length=100)]
 
 
 class JoinResponse(BaseModel):

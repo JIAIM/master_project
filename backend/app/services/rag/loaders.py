@@ -13,6 +13,9 @@ class UnsupportedFileError(ValueError):
     pass
 
 
+MIN_TEXT_CHARS = 300
+
+
 class EmptyDocumentError(ValueError):
     pass
 
@@ -77,15 +80,23 @@ def load_docx(path: Path) -> list[Document]:
 def load_document(path: str | Path) -> list[Document]:
     path = Path(path)
     ext = path.suffix.lower()
-    if ext == ".pdf":
-        docs = load_pdf(path)
-    elif ext == ".docx":
-        docs = load_docx(path)
-    else:
+    if ext not in (".pdf", ".docx"):
         raise UnsupportedFileError(f"Непідтримуваний формат: {ext}")
+    try:
+        docs = load_pdf(path) if ext == ".pdf" else load_docx(path)
+    except Exception as exc:  # noqa: BLE001
+        raise EmptyDocumentError(
+            f"Не вдалося прочитати файл: він пошкоджений або захищений паролем ({type(exc).__name__})."
+        ) from exc
 
-    if not docs or sum(len(d.page_content) for d in docs) < 50:
+    total = sum(len(d.page_content) for d in docs)
+    if total == 0:
         raise EmptyDocumentError(
             "Не вдалося витягти текст. Можливо, це скан без текстового шару — потрібне розпізнавання (OCR)."
+        )
+    if total < MIN_TEXT_CHARS:
+        raise EmptyDocumentError(
+            f"У файлі замало тексту ({total} символів). Для генерації питань потрібен навчальний матеріал "
+            f"обсягом щонайменше {MIN_TEXT_CHARS} символів (кілька абзаців)."
         )
     return docs

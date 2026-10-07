@@ -108,8 +108,11 @@ export function useProctoring({ enabled, thresholdSec = 3, onEvent }) {
           video: { width: 640, height: 480, facingMode: "user" },
           audio: false,
         });
-      } catch {
-        if (!cancelled) setStatus("denied");
+      } catch (err) {
+        if (!cancelled) {
+          setStatus("denied");
+          onEventRef.current?.({ event: "camera_denied", client_ts: Date.now(), details: { error: err?.name || "unknown" } });
+        }
         return;
       }
       if (cancelled) return;
@@ -129,7 +132,11 @@ export function useProctoring({ enabled, thresholdSec = 3, onEvent }) {
         });
       } catch (err) {
         console.error("Не вдалося запустити MediaPipe", err);
-        if (!cancelled) setStatus("error");
+        stream?.getTracks().forEach((t) => t.stop());
+        if (!cancelled) {
+          setStatus("error");
+          onEventRef.current?.({ event: "proctoring_unavailable", client_ts: Date.now() });
+        }
         return;
       }
       if (cancelled) return;

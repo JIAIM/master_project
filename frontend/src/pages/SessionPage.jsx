@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { API_URL, api, getToken } from "../api/client.js";
+import { api, download } from "../api/client.js";
 
 const ALERT_LABEL = {
   distraction_warning: "погляд поза екраном",
@@ -8,6 +8,8 @@ const ALERT_LABEL = {
   multiple_faces: "кілька облич у кадрі",
   tab_hidden: "перейшов на іншу вкладку",
   fullscreen_exit: "вийшов з повноекранного режиму",
+  camera_denied: "заборонив доступ до камери",
+  proctoring_unavailable: "прокторинг не запустився на пристрої",
 };
 
 const FLAG_LABEL = {
@@ -20,18 +22,7 @@ const FLAG_LABEL = {
 const fmtTime = (iso) => (iso ? new Date(iso).toLocaleTimeString("uk-UA", { hour: "2-digit", minute: "2-digit" }) : "—");
 const fmtScore = (v) => (v == null ? "—" : Number.isInteger(v) ? v : v.toFixed(1));
 
-async function downloadCsv(sessionId) {
-  const res = await fetch(`${API_URL}/sessions/${sessionId}/results.csv`, {
-    headers: { Authorization: `Bearer ${getToken()}` },
-  });
-  if (!res.ok) throw new Error("Не вдалося завантажити файл");
-  const url = URL.createObjectURL(await res.blob());
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `rezultaty_sesii_${sessionId}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
-}
+const downloadCsv = (sessionId) => download(`/sessions/${sessionId}/results.csv`, `rezultaty_sesii_${sessionId}.csv`);
 
 export default function SessionPage() {
   const { sessionId } = useParams();
@@ -139,6 +130,7 @@ export default function SessionPage() {
       <div className="host-grid">
         <div className="card">
           <h3>Студенти</h3>
+          <div className="table-wrap">
           <table className="table">
             <thead>
               <tr><th>Ім'я</th><th>Стан</th><th>Прогрес</th><th>Бали</th><th>Увага</th><th>Час</th></tr>
@@ -146,7 +138,10 @@ export default function SessionPage() {
             <tbody>
               {participants.map((p) => (
                 <tr key={p.participant_id} className={p.alert_active ? "row-alert" : ""}>
-                  <td><strong>{p.display_name}</strong></td>
+                  <td>
+                    <strong>{p.display_name}</strong>
+                    {p.camera_off && <div><span className="pill bad" title="Студент не дав доступу до камери або прокторинг не запустився">камера вимкнена</span></div>}
+                  </td>
                   <td>{p.state === "finished" ? <span className="pill ok">завершив</span> : <span className="pill pending">проходить</span>}</td>
                   <td style={{ minWidth: 140 }}>
                     <div className="row gap-sm" style={{ flexWrap: "nowrap" }}>
@@ -167,6 +162,7 @@ export default function SessionPage() {
               )}
             </tbody>
           </table>
+          </div>
         </div>
 
         <div className="card">
@@ -188,9 +184,17 @@ export default function SessionPage() {
         <div className="card">
           <h3>Аналіз якості питань</h3>
           <p className="muted small">
-            За {analytics.n_participants} завершеними спробами · надійність тесту KR-20:{" "}
-            {analytics.kr20 != null ? analytics.kr20.toFixed(2) : "недостатньо даних (потрібно більше студентів)"}
+            Завершених спроб: {analytics.n_participants} · надійність тесту KR-20:{" "}
+            {analytics.kr20 != null ? analytics.kr20.toFixed(2) : "недостатньо даних"}
           </p>
+          {analytics.n_participants < 5 && (
+            <div className="notice info small">
+              Статистика стає показовою від 5 завершених спроб. Поки що «частка правильних» відображає лише
+              відповіді тих, хто вже завершив: 0% — ніхто не відповів правильно або питання пропустили,
+              100% — усі відповіли правильно. Розрізнювальна здатність почне рахуватися з 5-ї спроби.
+            </div>
+          )}
+          <div className="table-wrap">
           <table className="table">
             <thead>
               <tr><th>#</th><th>Питання</th><th>Частка правильних</th><th>Розрізнювальна здатність</th><th>Зауваження</th></tr>
@@ -209,6 +213,7 @@ export default function SessionPage() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
     </div>

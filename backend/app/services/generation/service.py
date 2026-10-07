@@ -14,11 +14,11 @@ from app.core.config import get_settings
 from app.db.session import AsyncSessionLocal
 from app.models import GenerationJob, Material, Question, StudentAnswer, Test
 from app.models.enums import (
-    Difficulty, JobStatus, MaterialStatus, QuestionOrigin, QuestionStatus,
+    Difficulty, JobStatus, MaterialStatus, QuestionOrigin, QuestionStatus, QuestionType,
 )
-from app.services.generation.context import build_contexts, plan_difficulties
+from app.services.generation.context import build_contexts, plan_difficulties, plan_true_false
 from app.services.generation.generator import GenerationSpec
-from app.services.generation.persistence import build_question, save_question
+from app.services.generation.persistence import build_question, save_question, true_false_kind
 from app.services.generation.pipeline import GenerationFailedError, QuestionPipeline, get_pipeline
 from app.services.generation.prompts import TRANSFORM_INSTRUCTIONS
 from app.services.generation.schemas import LLMOption, LLMQuestion
@@ -94,6 +94,8 @@ async def run_generation_job(job_id: int) -> None:
 
             contexts = await build_contexts(get_vector_store(), material_ids, n, params.get("topic"))
             difficulties = plan_difficulties(n, params["difficulty"])
+            item_types = [types[i % len(types)] for i in range(n)]
+            answers = plan_true_false(item_types)
             stems = await active_stems(db, test.id)
             position = await next_position(db, test.id)
             pipeline = get_pipeline()
@@ -114,7 +116,8 @@ async def run_generation_job(job_id: int) -> None:
                 tasks = [
                     asyncio.create_task(_run_one(
                         pipeline, i, chunks,
-                        GenerationSpec(difficulty=difficulties[i], question_type=types[i % len(types)], language=language),
+                        GenerationSpec(difficulty=difficulties[i], question_type=item_types[i],
+                                       language=language, target_answer=answers[i]),
                         stems_snapshot,
                     ))
                     for i, chunks in batch
@@ -209,10 +212,17 @@ async def transform_question(
     if extra_instruction:
         instruction += f" Additional teacher request: {extra_instruction}"
 
+    target = None
+    if question.type == QuestionType.TRUE_FALSE:
+        correct = next((o for o in question.options if o.is_correct), None)
+        kind = true_false_kind(correct.text) if correct else None
+        target = None if kind is None else ("true" if kind else "false")
+
     spec = GenerationSpec(
         difficulty=shifted_difficulty(question.difficulty, action).value,
         question_type=question.type.value,
         language=language,
+        target_answer=target,
     )
     stems = [s for s in await active_stems(db, test.id) if s != question.text]
     result = await get_pipeline().run(

@@ -17,7 +17,7 @@ _TRUE_PREFIXES = ("true", "правд", "правил", "вірн", "істин"
 _UK_LABELS = {True: "Правда", False: "Неправда"}
 
 
-def _true_false_kind(text: str) -> bool | None:
+def true_false_kind(text: str) -> bool | None:
     key = text.strip().lower()
     if key.startswith(_FALSE_PREFIXES):
         return False
@@ -31,7 +31,7 @@ def true_false_labels(texts: list[str], language: str) -> list[str]:
     texts = [t.strip() for t in texts]
     if language != "uk" or len(texts) != 2:
         return texts
-    kinds = [_true_false_kind(t) for t in texts]
+    kinds = [true_false_kind(t) for t in texts]
     if kinds.count(None) == 1:
         known = next(k for k in kinds if k is not None)
         kinds = [k if k is not None else not known for k in kinds]

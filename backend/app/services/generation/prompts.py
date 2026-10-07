@@ -31,7 +31,22 @@ TRANSFORM_INSTRUCTIONS = {
 }
 
 
-def type_rules(question_type: str, num_options: int, language: str) -> str:
+_TRUE_FALSE_TARGET = {
+    "true": (
+        " The statement MUST be TRUE: it correctly restates a fact from the CONTEXT, so the correct option is "
+        "'True'."
+    ),
+    "false": (
+        " The statement MUST be FALSE: take a specific fact from the CONTEXT and change exactly one key detail "
+        "(a number, a term, a category, a cause or the direction of a relationship) so the statement becomes "
+        "clearly wrong but still plausible. Do not make it false just by adding a negation. The correct option "
+        "is 'False'. evidence_quote must contain the ORIGINAL correct fact from the CONTEXT, and the explanation "
+        "must state what is actually correct."
+    ),
+}
+
+
+def type_rules(question_type: str, num_options: int, language: str, target_answer: str | None = None) -> str:
     if question_type == "multiple_choice":
         return (
             f"multiple_choice: exactly {num_options} options, 2 or 3 of them correct, the rest distractors. "
@@ -41,6 +56,7 @@ def type_rules(question_type: str, num_options: int, language: str) -> str:
         return (
             "true_false: the stem is a declarative statement. Exactly 2 options: the words for "
             f"'True' and 'False' in {language}, in that order. Exactly one is correct."
+            + _TRUE_FALSE_TARGET.get(target_answer or "", "")
         )
     return f"single_choice: exactly {num_options} options, exactly ONE correct."
 
